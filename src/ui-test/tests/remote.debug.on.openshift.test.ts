@@ -14,11 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { assert } from 'chai';
 import * as path from 'path';
 import { ActivityBar, BottomBarPanel, Breakpoint, DebugView, EditorView, InputBox, SideBarView, TextEditor, VSBrowser, WebDriver } from "vscode-extension-tester";
-import { assert } from 'chai';
 import { addNewItemToRawJson, clearTerminal, deleteFolderContents, disconnectDebugger, executeCommand, killTerminal, waitUntilEditorIsOpened, waitUntilTerminalHasText } from '../utils';
-import { DEMO_FILE, QUARKUS_ATTACH_DEBUGGER, QUARKUS_CREATE_COMMAND, QUARKUS_DIR, QUARKUS_PROJECT_FOLDER, SPRINGBOOT_ATTACH_DEBUGGER, SPRINGBOOT_CREATE_COMMAND, SPRINGBOOT_DIR, SPRINGBOOT_PROJECT_FOLDER } from '../variables';
+import { QUARKUS_ATTACH_DEBUGGER, QUARKUS_CREATE_COMMAND, QUARKUS_DIR, SPRINGBOOT_ATTACH_DEBUGGER, SPRINGBOOT_CREATE_COMMAND, SPRINGBOOT_DIR } from '../variables';
 
 
 describe('Remote debug on OpenShift', function () {
@@ -40,16 +40,13 @@ describe('Remote debug on OpenShift', function () {
         it(`SpringBoot`, async function () {
             driver = VSBrowser.instance.driver;
 
+            await createProject(driver, SPRINGBOOT_CREATE_COMMAND, SPRINGBOOT_DIR)
             await createCamelRoute(driver, "Demo");
-            await createProject(driver, SPRINGBOOT_CREATE_COMMAND)
-
-            // open file
-            await VSBrowser.instance.openResources(path.join(SPRINGBOOT_PROJECT_FOLDER, DEMO_FILE));
 
             // set breakpoint
             textEditor = new TextEditor();
             await driver.wait(async function () {
-                return await textEditor.toggleBreakpoint(15);
+                return await textEditor.toggleBreakpoint(12);
             }, 5000);
 
             // open debug view
@@ -59,7 +56,7 @@ describe('Remote debug on OpenShift', function () {
             assert.isTrue(await validateLaunchConfiguration(debugView, SPRINGBOOT_ATTACH_DEBUGGER), "Required configuration is not present in Debug View.");
             await startDebugSession(debugView, SPRINGBOOT_ATTACH_DEBUGGER);
 
-            const terminalView = await new BottomBarPanel().openTerminalView();
+            await new BottomBarPanel().openTerminalView();
 
             // check breakpoint was hit
             const breakpoint = await waitForBreakpointPause(driver, textEditor);
@@ -80,11 +77,8 @@ describe('Remote debug on OpenShift', function () {
         it(`Quarkus`, async function () {
             driver = VSBrowser.instance.driver;
 
+            await createProject(driver, QUARKUS_CREATE_COMMAND, QUARKUS_DIR);
             await createCamelRoute(driver, "Demo");
-            await createProject(driver, QUARKUS_CREATE_COMMAND);
-
-            // open file
-            await VSBrowser.instance.openResources(path.join(QUARKUS_PROJECT_FOLDER, DEMO_FILE));
 
             // set breakpoint
             textEditor = new TextEditor();
@@ -99,7 +93,7 @@ describe('Remote debug on OpenShift', function () {
             assert.isTrue(await validateLaunchConfiguration(debugView, QUARKUS_ATTACH_DEBUGGER), "Required configuration is not present in Debug View.");
             await startDebugSession(debugView, QUARKUS_ATTACH_DEBUGGER);
 
-            const terminalView = await new BottomBarPanel().openTerminalView();
+            await new BottomBarPanel().openTerminalView();
 
             // check breakpoint was hit
             const breakpoint = await waitForBreakpointPause(driver, textEditor);
@@ -118,7 +112,6 @@ describe('Remote debug on OpenShift', function () {
         await VSBrowser.instance.openResources(directoryPath);
         await deleteFolderContents(directoryPath);
         await (await new ActivityBar().getViewControl('Explorer'))?.openView();
-        await new SideBarView().getContent().getSection(directory);
         await workaround(driver);
     }
 
@@ -183,16 +176,26 @@ async function createCamelRoute(driver: WebDriver, filename: string): Promise<vo
  * 
  * @param driver The WebDriver instance to use.
  * @param command Command for project creating. 
+ * @param projectDir The directory to create the project into
  */
-async function createProject(driver: WebDriver, command: string): Promise<void> {
+async function createProject(driver: WebDriver, command: string, projectDir: string): Promise<void> {
     let input: InputBox | undefined;
     await executeCommand(command);
     await driver.wait(async function () {
         input = await InputBox.create();
         return (await input.isDisplayed());
     }, 30000);
-    await input?.confirm(); // confirm name
-    await waitUntilTerminalHasText(driver, ['Terminal will be reused by tasks, press any key to close it.']);
+    await input?.setText('com.demo:test:1.0-SNAPSHOT');
+    await input?.confirm();
+
+    await driver.wait(async function () {
+        input = await InputBox.create();
+        return (await input.isDisplayed());
+    }, 30000);
+    await input?.setText(`${projectDir}${path.sep}`);
+    input?.confirm();
+    input?.confirm(); // should confirm twice, once to 'lock' the folder selection and another to continue.
+    await waitUntilTerminalHasText(driver, ['Terminal will be reused by tasks, press any key to close it.'], 2000, 12000);
     await new EditorView().closeAllEditors();
 }
 
@@ -241,9 +244,9 @@ async function startDebugSession(debugView: DebugView, configName: string): Prom
  * @returns 
  */
 async function waitForBreakpointPause(driver: WebDriver, textEditor: TextEditor, timeout: number = 60000, interval: number = 500): Promise<Breakpoint> {
-    const terminalView = await new BottomBarPanel().openTerminalView();
-    const breakpoint = await driver.wait<Breakpoint>(async () => {
+    await new BottomBarPanel().openTerminalView();
+    const breakpoint: Breakpoint = await driver.wait<Breakpoint>(async () => {
         return await textEditor.getPausedBreakpoint();
-    }, timeout, undefined, interval) as Breakpoint;
+    }, timeout, undefined, interval);
     return breakpoint;
 }
