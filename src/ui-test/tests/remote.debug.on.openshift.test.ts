@@ -18,7 +18,7 @@ import { assert } from 'chai';
 import * as path from 'path';
 import { ActivityBar, BottomBarPanel, Breakpoint, DebugView, EditorView, InputBox, SideBarView, TextEditor, VSBrowser, WebDriver } from "vscode-extension-tester";
 import { addNewItemToRawJson, clearTerminal, deleteFolderContents, disconnectDebugger, executeCommand, killTerminal, waitUntilEditorIsOpened, waitUntilTerminalHasText } from '../utils';
-import { QUARKUS_ATTACH_DEBUGGER, QUARKUS_CREATE_COMMAND, QUARKUS_DIR, SPRINGBOOT_ATTACH_DEBUGGER, SPRINGBOOT_CREATE_COMMAND, SPRINGBOOT_DIR } from '../variables';
+import { DEMO_FILE, QUARKUS_ATTACH_DEBUGGER, QUARKUS_CREATE_COMMAND, QUARKUS_DIR, QUARKUS_PROJECT_FOLDER, SPRINGBOOT_ATTACH_DEBUGGER, SPRINGBOOT_CREATE_COMMAND, SPRINGBOOT_DIR, SPRINGBOOT_PROJECT_FOLDER } from '../variables';
 
 
 describe('Remote debug on OpenShift', function () {
@@ -40,13 +40,16 @@ describe('Remote debug on OpenShift', function () {
         it(`SpringBoot`, async function () {
             driver = VSBrowser.instance.driver;
 
-            await createProject(driver, SPRINGBOOT_CREATE_COMMAND, SPRINGBOOT_DIR)
             await createCamelRoute(driver, "Demo");
+            await createProject(driver, SPRINGBOOT_CREATE_COMMAND, SPRINGBOOT_DIR)
+
+            // open file
+            await VSBrowser.instance.openResources(path.join(SPRINGBOOT_PROJECT_FOLDER, DEMO_FILE));
 
             // set breakpoint
             textEditor = new TextEditor();
             await driver.wait(async function () {
-                return await textEditor.toggleBreakpoint(12);
+                return await textEditor.toggleBreakpoint(15);
             }, 5000);
 
             // open debug view
@@ -77,8 +80,11 @@ describe('Remote debug on OpenShift', function () {
         it(`Quarkus`, async function () {
             driver = VSBrowser.instance.driver;
 
-            await createProject(driver, QUARKUS_CREATE_COMMAND, QUARKUS_DIR);
             await createCamelRoute(driver, "Demo");
+            await createProject(driver, QUARKUS_CREATE_COMMAND, QUARKUS_DIR);
+
+            // open file
+            await VSBrowser.instance.openResources(path.join(QUARKUS_PROJECT_FOLDER, DEMO_FILE));
 
             // set breakpoint
             textEditor = new TextEditor();
@@ -193,9 +199,9 @@ async function createProject(driver: WebDriver, command: string, projectDir: str
         return (await input.isDisplayed());
     }, 30000);
     await input?.setText(`${projectDir}${path.sep}`);
-    input?.confirm();
-    input?.confirm(); // should confirm twice, once to 'lock' the folder selection and another to continue.
-    await waitUntilTerminalHasText(driver, ['Terminal will be reused by tasks, press any key to close it.'], 2000, 12000);
+    await input?.confirm();
+    await input?.confirm(); // should confirm twice, once to 'lock' the folder selection and another to continue.
+    await waitUntilTerminalHasText(driver, ['Terminal will be reused by tasks, press any key to close it.'], 2000, 48000);
     await new EditorView().closeAllEditors();
 }
 
